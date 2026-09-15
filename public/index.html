@@ -23,7 +23,7 @@ h1{font-size:30px;margin:0 0 7px}h2{margin:0 0 10px}.grid{display:grid;grid-temp
 </head>
 <body>
 <div class="wrap">
-<div class="top"><div><div class="brand">2027 경기도 진로전담교사 무료 모의면접 <span class="pill">v5 · 완전무료 · API 없음</span></div><div class="sub">브라우저 음성인식 → 자료기반 루브릭 자동점검 → 모범답안</div></div><span class="pill">NETLIFY</span></div>
+<div class="top"><div><div class="brand">2027 경기도 진로전담교사 무료 모의면접 <span class="pill">v5.1 · 무료 · 채점개선 · API 없음</span></div><div class="sub">브라우저 음성인식 → 자료기반 루브릭 자동점검 → 모범답안</div></div><span class="pill">NETLIFY</span></div>
 
 <section id="setup" class="card panel">
 <h1>API 비용 없이 무료로 연습합니다.</h1>
@@ -119,8 +119,61 @@ function startAnswer(){chunks=[];blob=null;recognizedText='';interimText='';phas
 function finishAnswer(){if(phase!=='answer')return;clearInterval(timer);elapsed=Math.min(90,Math.max(1,Math.round((Date.now()-answerStart)/1000)));phase='processing';$('#recBadge').textContent='● REC SAVED';if(recognition){try{recognition.stop()}catch(e){}}if(recorder&&recorder.state==='recording')recorder.stop()}
 function cleanWords(text){return (text||'').replace(/[·,/()→\-]/g,' ').split(/\s+/).map(x=>x.replace(/[^가-힣A-Za-z0-9]/g,'')).filter(x=>x.length>=2)}
 function unique(a){return [...new Set(a)]}
-function evaluateLocal(transcript){const q=session[idx],r=rubricFor(q.category),t=(transcript||'').replace(/\s/g,'').toLowerCase();let groups=r.groups||r.guide.map(g=>unique(cleanWords(g)).slice(0,5));let covered=[],missing=[];groups.forEach((g,i)=>{let hit=g.some(k=>t.includes(String(k).replace(/\s/g,'').toLowerCase()));(hit?covered:missing).push(r.guide[i]||g.join('·'))});let coverage=groups.length?covered.length/groups.length:0;let content=Math.round(40*coverage);let qwords=unique(cleanWords(q.q)).filter(x=>x.length>=2);let qhit=qwords.filter(k=>t.includes(k.toLowerCase())).length;let relevance=Math.min(20,Math.round(8+12*Math.min(1,qhit/Math.max(3,qwords.length*.35))));if(!transcript.trim())relevance=0;let connectors=['첫째','둘째','셋째','먼저','다음','마지막','따라서','이를 통해','결론'];let ch=connectors.filter(k=>transcript.includes(k)).length;let structure=Math.min(15,(transcript.length>80?6:2)+Math.min(9,ch*3));let specifics=['예를 들어','구체적','프로그램','상담','연계','협력','활용','운영','점검','피드백','지원'];let sh=specifics.filter(k=>transcript.includes(k)).length;let specificity=Math.min(15,(transcript.length>120?5:2)+Math.min(10,sh*2));let delivery=elapsed>=55&&elapsed<=90?10:elapsed>=35?8:elapsed>=20?6:4;if(!transcript.trim())delivery=Math.min(delivery,2);let total=Math.min(100,content+relevance+structure+specificity+delivery);let strengths=[];if(coverage>=.6)strengths.push('자료 기반 핵심요소를 비교적 충실하게 포함했습니다.');if(structure>=10)strengths.push('순서 표현을 사용해 답변 구조가 비교적 명확합니다.');if(specificity>=10)strengths.push('상담·연계·운영 등 실행 관점의 표현이 포함되었습니다.');if(delivery>=8)strengths.push('면접 답변 시간 범위를 적절히 활용했습니다.');if(!strengths.length)strengths.push('답변을 실제로 말하고 점검하는 연습을 완료했습니다.');let improvements=[];if(missing.length)improvements.push('빠진 핵심요소를 1~2개 보완해 내용의 완결성을 높이세요.');if(structure<10)improvements.push('첫째-둘째-셋째 구조로 핵심 역할을 구분해 말해 보세요.');if(specificity<10)improvements.push('학교 현장에서 실행할 수 있는 구체적 방법이나 사례를 덧붙이세요.');if(elapsed<55)improvements.push('90초 답변을 충분히 활용하도록 근거와 기대효과를 보강하세요.');let improved='먼저, '+(r.guide[0]||'질문의 핵심 개념을 정확히 설명하겠습니다.')+'.\n\n';r.guide.slice(1,4).forEach((g,i)=>{improved+=['첫째, ','둘째, ','셋째, '][i]+g+'.\n'});improved+='\n이를 통해 학생이 자신의 진로와 삶을 주도적으로 설계하도록 지원하는 진로전담교사가 되겠습니다.';return{total_score:total,scores:{content,relevance,structure,specificity,delivery},overall_feedback:`무료 공개판의 자료 기반 자동점검 결과입니다. 핵심요소 ${covered.length}/${groups.length}개가 확인되었습니다. 의미를 이해하는 생성형 AI 채점이 아니라 내장 루브릭·표현·답변시간을 기준으로 한 연습용 점검입니다.`,strengths,improvements,covered_points:covered,missing_points:missing,improved_answer:improved}}
-function beginAnalysis(){show('review');$('#loading').style.display='none';$('#errorBox').style.display='none';$('#transcriptArea').style.display='block';let txt=(recognizedText+' '+interimText).trim();$('#transcript').value=txt;if(!txt){$('#errorBox').style.display='block';$('#errorBox').textContent='이 브라우저에서 음성인식 결과를 받지 못했습니다. 녹음은 보존되어 있으니 재생해 들으며 아래 전사문 칸에 답변을 직접 입력한 뒤 「자료 기반 무료 평가하기」를 눌러 주세요.'}}
+function norm(s){return String(s||'').toLowerCase().replace(/[\s·ㆍ,./()\-_'"“”‘’:;!?]/g,'')}
+const SEMANTIC_SETS=[
+ ['자기이해','자아이해','자신이해','나를이해'],['흥미','흥미검사','직업흥미'],['적성','적성검사','직업적성','능력'],['가치관','가치관검사','직업가치관','가치'],['성격','성격검사'],['진로발달','진로성숙','진로결정'],
+ ['절대적결론','절대적으로해석','맹신','단정','검사하나로판단','결과만으로판단'],['종합','종합적으로','함께고려','면담','면접','상담과함께','다양한정보'],['발달수준','발달단계','학생수준'],['호소문제','상담문제','학생의문제','요구'],['도구선택','검사선택','적절한검사'],['윤리','검사윤리'],['개인정보','정보보호','비밀보장','비밀유지'],
+ ['진로탐색','직업탐색'],['진로설계','진로계획','진로로드맵'],['진로의사결정','진로결정','의사결정'],['과목선택','교과목선택','과목을선택'],['학업설계','학업계획','이수계획','3개년계획'],['지속점검','지속적으로점검','모니터링','재설계','수정보완'],
+ ['협업','협력','함께'],['지역사회','지역자원'],['맞춤형','개별화','개인별'],['학생주도','학생주도성','자기주도'],['피드백','환류'],['구체적','실행','실천']
+];
+function conceptHit(text, phrase){const t=norm(text),p=norm(phrase);if(!p)return false;if(t.includes(p))return true;for(const set of SEMANTIC_SETS){const ns=set.map(norm);if(ns.includes(p)&&ns.some(x=>t.includes(x)))return true;}return false}
+function guideHit(text,guide){let words=cleanWords(guide).filter(x=>x.length>=2);let hits=words.filter(w=>conceptHit(text,w)).length;if(hits>=Math.min(2,words.length))return true;return SEMANTIC_SETS.some(set=>set.some(a=>conceptHit(guide,a))&&set.some(a=>conceptHit(text,a)))}
+function evaluateLocal(transcript){
+ const q=session[idx],r=rubricFor(q.category),text=transcript||'';
+ let guides=r.guide||[];
+ let groups=r.groups&&r.groups.length?r.groups:guides.map(g=>unique(cleanWords(g)).filter(x=>x.length>=2).slice(0,7));
+ let covered=[],missing=[];
+ groups.forEach((g,i)=>{let hit=g.some(k=>conceptHit(text,k))||guideHit(text,guides[i]||'');(hit?covered:missing).push(guides[i]||g.join('·'))});
+ let coverage=groups.length?covered.length/groups.length:0;
+ // 내용 점수: 핵심요소 비율을 중심으로 하되 부분 충족도 인정
+ let content=Math.round(40*coverage);
+ if(text.trim()&&content<8)content=8;
+ // 질문 적합성: 질문의 요구 개념 + 해당 루브릭 핵심의 실제 언급을 함께 반영
+ let qwords=unique(cleanWords(q.q)).filter(x=>x.length>=2);
+ let qhit=qwords.filter(k=>conceptHit(text,k)).length;
+ let semanticRel=Math.max(coverage,Math.min(1,qhit/Math.max(3,qwords.length*.28)));
+ let relevance=text.trim()?Math.round(6+14*semanticRel):0;
+ // 구조: 번호 표현뿐 아니라 문장 전개/나열도 인정
+ let connectors=['첫째','둘째','셋째','먼저','다음','마지막','따라서','또한','그리고','이를 통해','결론'];
+ let ch=connectors.filter(k=>text.includes(k)).length;
+ let sentenceCount=(text.match(/[.!?]|다\.|니다\.|입니다/g)||[]).length;
+ let structure=Math.min(15,(text.length>55?5:3)+Math.min(6,ch*2)+Math.min(4,Math.max(0,sentenceCount-1)));
+ // 구체성: 질문이 요구한 항목 나열 자체도 구체성으로 인정
+ let specifics=['예를 들어','프로그램','상담','연계','협력','활용','운영','점검','피드백','지원','검사','학생','교사','학교','지역','과목','체험','개인정보','윤리'];
+ let sh=specifics.filter(k=>text.includes(k)).length;
+ let specificity=Math.min(15,(text.length>70?5:3)+Math.min(10,sh));
+ // 시간: 짧은 즉답도 과도하게 감점하지 않음. 35~90초를 적정 범위로 봄
+ let delivery=elapsed>=35&&elapsed<=90?10:elapsed>=20?9:elapsed>=10?7:elapsed>0?5:4;
+ if(!text.trim())delivery=0;
+ let total=Math.min(100,content+relevance+structure+specificity+delivery);
+ let strengths=[];
+ if(coverage>=.6)strengths.push('질문에서 요구한 자료 기반 핵심요소를 비교적 충실하게 포함했습니다.');
+ else if(coverage>=.35)strengths.push('핵심 개념 일부를 정확하게 언급했습니다. 빠진 요구 요소를 보완하면 완결성이 높아집니다.');
+ if(structure>=10)strengths.push('답변의 순서와 문장 전개가 비교적 명확합니다.');
+ if(specificity>=10)strengths.push('학생·상담·검사·학교 실행 등 구체적인 표현이 포함되었습니다.');
+ if(delivery>=9)strengths.push('면접 답변 시간 활용이 적절합니다.');
+ if(!strengths.length)strengths.push('답변을 실제로 말하고 전사문을 점검하는 연습을 완료했습니다.');
+ let improvements=[];
+ if(missing.length)improvements.push(`빠진 핵심요소 ${Math.min(2,missing.length)}개를 우선 보완해 질문의 요구사항을 완결하세요.`);
+ if(structure<10)improvements.push('요구 항목이 여러 개인 문제는 “목적-영역-유의점” 또는 “첫째-둘째-셋째”처럼 구분해 답하세요.');
+ if(specificity<10)improvements.push('개념 설명 뒤 학교 현장에서의 적용 방법이나 구체적 예를 한 문장 덧붙이세요.');
+ if(elapsed<20)improvements.push('짧은 답변이라도 핵심 근거와 적용 방법을 한두 문장 보강하면 더 안정적입니다.');
+ let improved='먼저, '+(guides[0]||'질문의 핵심 개념을 정확히 설명하겠습니다.')+'.\n\n';
+ guides.slice(1,4).forEach((g,i)=>{improved+=['첫째, ','둘째, ','셋째, '][i]+g+'.\n'});
+ if(guides[4]) improved+='마지막으로, '+guides[4]+'.\n';
+ improved+='\n이를 통해 학생의 자기이해와 주도적인 진로설계를 지원하겠습니다.';
+ return{total_score:total,scores:{content,relevance,structure,specificity,delivery},overall_feedback:`v5.1 자료 기반 자동점검 결과입니다. 핵심요소 ${covered.length}/${groups.length}개가 확인되었습니다. 동의어·유사표현을 함께 인정하도록 개선했으며, 생성형 AI가 의미를 판단하는 채점은 아닙니다.`,strengths,improvements,covered_points:covered,missing_points:missing,improved_answer:improved}
+}
 function reevaluate(){const transcript=$('#transcript').value.trim();if(!transcript)return alert('전사문을 입력해 주세요.');currentEvaluation=evaluateLocal(transcript);renderResult()}
 function renderResult(){if(!currentEvaluation){const t=$('#transcript').value.trim();if(!t)return alert('전사문을 입력한 뒤 무료 평가를 진행해 주세요.');currentEvaluation=evaluateLocal(t)}const e=currentEvaluation,q=session[idx];show('result');$('#scoreNum').textContent=e.total_score;$('#scoreCircle').style.setProperty('--p',e.total_score+'%');$('#overall').textContent=e.overall_feedback||'';const defs=[['내용·전문성','content',40],['질문 적합성','relevance',20],['논리적 구조','structure',15],['구체성·실행성','specificity',15],['시간·전달','delivery',10]];$('#metrics').innerHTML=defs.map(([n,k,m])=>`<div class="metric"><span>${n}</span><div class="mtrack"><div class="mfill" style="width:${Math.min(100,(e.scores?.[k]||0)/m*100)}%"></div></div><b>${e.scores?.[k]||0}/${m}</b></div>`).join('');const lis=(id,a)=>$('#'+id).innerHTML=(a&&a.length?a:['해당 항목 없음']).map(x=>`<li>${x}</li>`).join('');lis('strengths',e.strengths);lis('improvements',e.improvements);lis('covered',e.covered_points);lis('missing',e.missing_points);$('#betterAnswer').textContent=e.improved_answer||'';$('#finalTranscript').textContent=$('#transcript').value;const r=rubricFor(q.category);$('#rubricGuide').innerHTML='<ol>'+r.guide.map(x=>`<li>${x}</li>`).join('')+'</ol>';$('#source').textContent='평가 근거: '+r.source;records.push({question:q.q,score:e.total_score,seconds:elapsed,category:q.category,transcript:$('#transcript').value})}
 function renderSummary(){show('summary');const s=records.map(r=>r.score);$('#answered').textContent=records.length;$('#avg').textContent=records.length?Math.round(s.reduce((a,b)=>a+b,0)/s.length):0;$('#best').textContent=records.length?Math.max(...s):0;$('#summaryList').innerHTML=records.map((r,i)=>`<div class="fb" style="margin-top:10px"><div class="muted">#${i+1} · ${r.category} · ${r.seconds}초</div><b style="display:block;margin:6px 0">${r.question}</b><span style="font-size:23px;font-weight:900">${r.score}점</span></div>`).join('');if(stream)stream.getTracks().forEach(t=>t.stop())}
