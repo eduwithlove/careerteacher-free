@@ -23,7 +23,7 @@ h1{font-size:30px;margin:0 0 7px}h2{margin:0 0 10px}.grid{display:grid;grid-temp
 </head>
 <body>
 <div class="wrap">
-<div class="top"><div><div class="brand">2027 경기도 진로전담교사 무료 모의면접 <span class="pill">v5.1 · 무료 · 채점개선 · API 없음</span></div><div class="sub">브라우저 음성인식 → 자료기반 루브릭 자동점검 → 모범답안</div></div><span class="pill">NETLIFY</span></div>
+<div class="top"><div><div class="brand">2027 경기도 진로전담교사 무료 모의면접 <span class="pill">v5.2 · 무료 · 전사확인 · 채점개선</span></div><div class="sub">브라우저 음성인식 → 자료기반 루브릭 자동점검 → 모범답안</div></div><span class="pill">NETLIFY</span></div>
 
 <section id="setup" class="card panel">
 <h1>API 비용 없이 무료로 연습합니다.</h1>
@@ -57,12 +57,12 @@ h1{font-size:30px;margin:0 0 7px}h2{margin:0 0 10px}.grid{display:grid;grid-temp
 <div class="phase" style="text-align:left">RECORDED ANSWER</div>
 <h2>답변 전사문을 확인하고 무료 평가합니다.</h2>
 <div class="audioBox"><audio id="reviewAudio" controls></audio></div>
-<div id="loading" class="loading"><div class="spinner"></div><b id="loadingText">자료 기반 평가기준으로 답변을 점검하고 있습니다…</b></div>
+<div id="loading" class="loading" style="display:none"><div class="spinner"></div><b id="loadingText">음성인식 결과를 정리하고 있습니다…</b></div>
 <div id="transcriptArea" style="display:none">
 <label style="margin-top:14px">음성인식 전사문</label>
 <textarea id="transcript"></textarea>
 <div class="muted" style="margin-top:7px">음성인식이 부정확하면 직접 수정하거나, 인식되지 않은 경우 답변을 직접 입력한 뒤 평가하세요.</div>
-<div class="controls" style="margin-top:14px"><button id="reeval" class="btn primary">자료 기반 무료 평가하기</button><button id="showResult" class="btn">평가 결과 보기</button></div>
+<div class="controls" style="margin-top:14px"><button id="reviewRetry" class="btn">🎤 다시 답변하기</button><button id="reeval" class="btn primary">이 답변 평가하기</button></div>
 </div>
 <div id="errorBox" class="notice" style="display:none"></div>
 </section>
@@ -115,8 +115,22 @@ function prepDone(){phase='awaitAnswer';$('#phase').textContent='READY TO ANSWER
 function startPrep(){phase='prep';$('#phase').textContent='PREPARATION · 30 SEC';$('#mainBtn').textContent='준비 건너뛰고 답변';countdown(30,'prep')}
 function bestMime(){for(const t of ['audio/webm;codecs=opus','audio/webm','audio/mp4'])if(window.MediaRecorder&&MediaRecorder.isTypeSupported(t))return t;return ''}
 function startRecognition(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;recognition=new SR();recognition.lang='ko-KR';recognition.continuous=true;recognition.interimResults=true;recognition.onresult=e=>{interimText='';for(let i=e.resultIndex;i<e.results.length;i++){let t=e.results[i][0].transcript;if(e.results[i].isFinal)recognizedText+=t+' ';else interimText+=t}};recognition.onerror=()=>{};recognition.onend=()=>{if(phase==='answer'){try{recognition.start()}catch(e){}}};try{recognition.start()}catch(e){}}
-function startAnswer(){chunks=[];blob=null;recognizedText='';interimText='';phase='answer';answerStart=Date.now();elapsed=0;const mime=bestMime();try{recorder=new MediaRecorder(audioStream,mime?{mimeType:mime,audioBitsPerSecond:32000}:{audioBitsPerSecond:32000})}catch(e){recorder=new MediaRecorder(audioStream)}recorder.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};recorder.onstop=()=>{blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});if(audioUrl)URL.revokeObjectURL(audioUrl);audioUrl=URL.createObjectURL(blob);$('#audio').src=audioUrl;$('#reviewAudio').src=audioUrl;$('#audioBox').style.display='block';beginAnalysis()};recorder.start(1000);startRecognition();$('#recBadge').textContent='● REC';$('#phase').textContent='ANSWERING · 90 SEC';$('#mainBtn').textContent='답변 완료';$('#hint').textContent='답변을 말하면 Chrome 음성인식으로 전사됩니다. API 비용은 없습니다.';countdown(90,'answer')}
+function startAnswer(){chunks=[];blob=null;recognizedText='';interimText='';phase='answer';answerStart=Date.now();elapsed=0;const mime=bestMime();try{recorder=new MediaRecorder(audioStream,mime?{mimeType:mime,audioBitsPerSecond:32000}:{audioBitsPerSecond:32000})}catch(e){recorder=new MediaRecorder(audioStream)}recorder.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};recorder.onstop=()=>{blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});if(audioUrl)URL.revokeObjectURL(audioUrl);audioUrl=URL.createObjectURL(blob);$('#audio').src=audioUrl;$('#reviewAudio').src=audioUrl;$('#audioBox').style.display='block';setTimeout(showTranscriptReview,450)};recorder.start(1000);startRecognition();$('#recBadge').textContent='● REC';$('#phase').textContent='ANSWERING · 90 SEC';$('#mainBtn').textContent='답변 완료';$('#hint').textContent='답변을 말하면 Chrome 음성인식으로 전사됩니다. API 비용은 없습니다.';countdown(90,'answer')}
 function finishAnswer(){if(phase!=='answer')return;clearInterval(timer);elapsed=Math.min(90,Math.max(1,Math.round((Date.now()-answerStart)/1000)));phase='processing';$('#recBadge').textContent='● REC SAVED';if(recognition){try{recognition.stop()}catch(e){}}if(recorder&&recorder.state==='recording')recorder.stop()}
+function showTranscriptReview(){
+  phase='review';
+  currentEvaluation=null;
+  $('#loading').style.display='none';
+  $('#errorBox').style.display='none';
+  $('#transcript').value=(recognizedText+' '+interimText).replace(/\s+/g,' ').trim();
+  $('#transcriptArea').style.display='block';
+  show('review');
+  setTimeout(()=>$('#transcript').focus(),50);
+}
+function retryFromReview(){
+  currentEvaluation=null;recognizedText='';interimText='';blob=null;
+  loadQuestion();
+}
 function cleanWords(text){return (text||'').replace(/[·,/()→\-]/g,' ').split(/\s+/).map(x=>x.replace(/[^가-힣A-Za-z0-9]/g,'')).filter(x=>x.length>=2)}
 function unique(a){return [...new Set(a)]}
 function norm(s){return String(s||'').toLowerCase().replace(/[\s·ㆍ,./()\-_'"“”‘’:;!?]/g,'')}
@@ -177,7 +191,7 @@ function evaluateLocal(transcript){
 function reevaluate(){const transcript=$('#transcript').value.trim();if(!transcript)return alert('전사문을 입력해 주세요.');currentEvaluation=evaluateLocal(transcript);renderResult()}
 function renderResult(){if(!currentEvaluation){const t=$('#transcript').value.trim();if(!t)return alert('전사문을 입력한 뒤 무료 평가를 진행해 주세요.');currentEvaluation=evaluateLocal(t)}const e=currentEvaluation,q=session[idx];show('result');$('#scoreNum').textContent=e.total_score;$('#scoreCircle').style.setProperty('--p',e.total_score+'%');$('#overall').textContent=e.overall_feedback||'';const defs=[['내용·전문성','content',40],['질문 적합성','relevance',20],['논리적 구조','structure',15],['구체성·실행성','specificity',15],['시간·전달','delivery',10]];$('#metrics').innerHTML=defs.map(([n,k,m])=>`<div class="metric"><span>${n}</span><div class="mtrack"><div class="mfill" style="width:${Math.min(100,(e.scores?.[k]||0)/m*100)}%"></div></div><b>${e.scores?.[k]||0}/${m}</b></div>`).join('');const lis=(id,a)=>$('#'+id).innerHTML=(a&&a.length?a:['해당 항목 없음']).map(x=>`<li>${x}</li>`).join('');lis('strengths',e.strengths);lis('improvements',e.improvements);lis('covered',e.covered_points);lis('missing',e.missing_points);$('#betterAnswer').textContent=e.improved_answer||'';$('#finalTranscript').textContent=$('#transcript').value;const r=rubricFor(q.category);$('#rubricGuide').innerHTML='<ol>'+r.guide.map(x=>`<li>${x}</li>`).join('')+'</ol>';$('#source').textContent='평가 근거: '+r.source;records.push({question:q.q,score:e.total_score,seconds:elapsed,category:q.category,transcript:$('#transcript').value})}
 function renderSummary(){show('summary');const s=records.map(r=>r.score);$('#answered').textContent=records.length;$('#avg').textContent=records.length?Math.round(s.reduce((a,b)=>a+b,0)/s.length):0;$('#best').textContent=records.length?Math.max(...s):0;$('#summaryList').innerHTML=records.map((r,i)=>`<div class="fb" style="margin-top:10px"><div class="muted">#${i+1} · ${r.category} · ${r.seconds}초</div><b style="display:block;margin:6px 0">${r.question}</b><span style="font-size:23px;font-weight:900">${r.score}점</span></div>`).join('');if(stream)stream.getTracks().forEach(t=>t.stop())}
-$('#start').onclick=async()=>{session=choose();if(!session.length)return alert('해당 문제가 없습니다.');records=[];idx=0;await initMedia();loadQuestion()};$('#mainBtn').onclick=()=>{if(phase==='ready')startPrep();else if(phase==='prep'||phase==='awaitAnswer')startAnswer();else if(phase==='answer')finishAnswer()};$('#showResult').onclick=renderResult;$('#reeval').onclick=reevaluate;$('#retry').onclick=loadQuestion;$('#next').onclick=()=>{if(idx>=session.length-1)renderSummary();else{idx++;loadQuestion()}};$('#summaryBtn').onclick=renderSummary;$('#finishSession').onclick=()=>{if(confirm('면접을 종료하고 결과를 볼까요?'))renderSummary()};
+$('#start').onclick=async()=>{session=choose();if(!session.length)return alert('해당 문제가 없습니다.');records=[];idx=0;await initMedia();loadQuestion()};$('#mainBtn').onclick=()=>{if(phase==='ready')startPrep();else if(phase==='prep'||phase==='awaitAnswer')startAnswer();else if(phase==='answer')finishAnswer()};$('#reeval').onclick=reevaluate;$('#reviewRetry').onclick=retryFromReview;$('#retry').onclick=loadQuestion;$('#next').onclick=()=>{if(idx>=session.length-1)renderSummary();else{idx++;loadQuestion()}};$('#summaryBtn').onclick=renderSummary;$('#finishSession').onclick=()=>{if(confirm('면접을 종료하고 결과를 볼까요?'))renderSummary()};
 </script>
 </body>
 </html>
