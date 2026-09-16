@@ -25,7 +25,7 @@ h1{font-size:30px;margin:0 0 7px}h2{margin:0 0 10px}.grid{display:grid;grid-temp
 </head>
 <body>
 <div class="wrap">
-<div class="top"><div><div class="brand">2027 경기도 진로전담교사 면접 학습플랫폼 <span class="pill">v6.1 · 무료 · 질문 직접선택</span></div><div class="sub">모의면접 · 문제은행/답안공부 · 나의 학습기록</div></div><span class="pill">NETLIFY</span></div>
+<div class="top"><div><div class="brand">2027 경기도 진로전담교사 면접 학습플랫폼 <span class="pill">v6.2 · 무료 · 질문선택 안정화</span></div><div class="sub">모의면접 · 문제은행/답안공부 · 나의 학습기록</div></div><span class="pill">NETLIFY</span></div>
 <div class="nav"><button class="btn active" data-view="setup">🎤 모의면접</button><button class="btn" data-view="study">📚 문제은행·공부하기</button><button class="btn" data-view="progress">✅ 나의 학습기록</button></div>
 
 <section id="setup" class="card panel">
@@ -143,19 +143,29 @@ function shuffle(a){return [...a].sort(()=>Math.random()-.5)}
 function fmt(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
 function show(id){['setup','study','progress','interview','review','result','summary'].forEach(x=>$('#'+x).style.display=x===id?'block':'none');document.querySelectorAll('.nav .btn').forEach(b=>b.classList.toggle('active',b.dataset.view===id));if(id==='study')renderBank();if(id==='progress')renderProgress()}
 [...new Set(BANK.map(x=>x.category))].sort((a,b)=>a.localeCompare(b,'ko')).forEach(c=>{let o=document.createElement('option');o.value=c;o.textContent=c;$('#category').appendChild(o)});
-renderDirectPicker();
 let selectedQuestionIdx=[];
 function renderDirectPicker(){
   const groups={}; BANK.forEach((q,i)=>(groups[q.category]??=[]).push({q,i}));
-  $('#directPicker').innerHTML=Object.keys(groups).sort((a,b)=>a.localeCompare(b,'ko')).map(cat=>`<details class="bankItem" style="margin-bottom:8px"><summary style="cursor:pointer;font-weight:850;font-size:16px">${cat} <span class="pill">${groups[cat].length}문항</span></summary><div style="margin-top:10px">${groups[cat].map(({q,i})=>`<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-top:1px solid #e5e7eb;cursor:pointer"><input type="checkbox" class="directQ" value="${i}" ${selectedQuestionIdx.includes(i)?'checked':''} style="width:auto;margin-top:4px"><span><b>${q.q}</b><br><span class="muted">${sourceText(q)} · ${q.form||'혼합'}</span></span></label>`).join('')}</div></details>`).join('');
-  document.querySelectorAll('.directQ').forEach(cb=>cb.onchange=()=>{
-    const i=+cb.value;
-    if(cb.checked){if(selectedQuestionIdx.length>=5){cb.checked=false;return alert('직접 선택은 최대 5문항까지 가능합니다.')} if(!selectedQuestionIdx.includes(i))selectedQuestionIdx.push(i)}
-    else selectedQuestionIdx=selectedQuestionIdx.filter(x=>x!==i);
-    updateSelectedCount();
-  }); updateSelectedCount();
+  $('#directPicker').innerHTML=Object.keys(groups).sort((a,b)=>a.localeCompare(b,'ko')).map((cat,ci)=>`<div class="bankItem directGroup" style="margin-bottom:8px;padding:0;overflow:hidden"><button type="button" class="directCatBtn" data-cat="${ci}" aria-expanded="false" style="width:100%;border:0;background:transparent;padding:14px 16px;cursor:pointer;font-weight:850;font-size:16px;text-align:left;display:flex;justify-content:space-between;align-items:center"><span>▶ ${cat}</span><span class="pill">${groups[cat].length}문항</span></button><div class="directChildren" data-panel="${ci}" style="display:none;padding:0 14px 12px">${groups[cat].map(({q,i})=>`<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-top:1px solid #e5e7eb;cursor:pointer"><input type="checkbox" class="directQ" value="${i}" ${selectedQuestionIdx.includes(i)?'checked':''} style="width:20px;height:20px;flex:0 0 auto;margin-top:3px"><span><b>${q.q}</b><br><span class="muted">${sourceText(q)} · ${q.form||'혼합'}</span></span></label>`).join('')}</div></div>`).join('');
+  updateSelectedCount();
 }
-function updateSelectedCount(){$('#selectedCount').textContent=`선택 ${selectedQuestionIdx.length} / 5문항`}
+function updateSelectedCount(){
+  $('#selectedCount').textContent=`선택 ${selectedQuestionIdx.length} / 5문항`;
+  const b=$('#startSelected'); if(b){b.disabled=selectedQuestionIdx.length===0;b.style.opacity=selectedQuestionIdx.length===0?'.55':'1';b.style.cursor=selectedQuestionIdx.length===0?'not-allowed':'pointer'}
+}
+$('#directPicker').addEventListener('click',e=>{
+  const btn=e.target.closest('.directCatBtn'); if(!btn)return;
+  const panel=$(`#directPicker .directChildren[data-panel="${btn.dataset.cat}"]`); if(!panel)return;
+  const opening=panel.style.display==='none'; panel.style.display=opening?'block':'none';btn.setAttribute('aria-expanded',opening?'true':'false');
+  const first=btn.querySelector('span'); if(first)first.textContent=(opening?'▼ ':'▶ ')+first.textContent.replace(/^[▶▼]\s*/, '');
+});
+$('#directPicker').addEventListener('change',e=>{
+  const cb=e.target.closest('.directQ'); if(!cb)return; const i=+cb.value;
+  if(cb.checked){if(selectedQuestionIdx.length>=5&&!selectedQuestionIdx.includes(i)){cb.checked=false;alert('직접 선택은 최대 5문항까지 가능합니다.');return}if(!selectedQuestionIdx.includes(i))selectedQuestionIdx.push(i)}
+  else selectedQuestionIdx=selectedQuestionIdx.filter(x=>x!==i);
+  updateSelectedCount();
+});
+renderDirectPicker();
 async function startSelectedQuestions(){if(!selectedQuestionIdx.length)return alert('연습할 질문을 1개 이상 선택해 주세요.');session=selectedQuestionIdx.map(i=>BANK[i]);records=[];idx=0;await initMedia();loadQuestion()}
 async function initMedia(){try{stream=await navigator.mediaDevices.getUserMedia({video:true,audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});$('#video').srcObject=stream;audioStream=new MediaStream(stream.getAudioTracks())}catch(e){alert('카메라/마이크 권한이 필요합니다. HTTPS 주소를 Chrome에서 열고 권한을 허용해 주세요.');throw e}}
 function choose(){let mode=$('#mode').value,cat=$('#category').value,form=$('#form').value,n=+$('#count').value;let a=BANK.filter(x=>mode==='mixed'||(mode==='actual'&&x.type==='기출')||(mode==='expected'&&x.type==='예상')||(mode==='2027'&&x.type==='2027 예상')||(mode==='whitepaper'&&x.type==='인수위 백서'));if(cat!=='all')a=a.filter(x=>x.category===cat);if(form!=='all')a=a.filter(x=>x.form===form);return shuffle(a).slice(0,Math.min(n,a.length))}
